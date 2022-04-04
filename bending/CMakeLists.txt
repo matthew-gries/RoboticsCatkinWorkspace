@@ -131,7 +131,7 @@ add_definitions(${PCL_DEFINITIONS})
 # )
 
 add_executable(bending src/bending.cpp)
-target_link_libraries(bending ${catkin_LIBRARIES})
+target_link_libraries(bending ${catkin_LIBRARIES} ${PCL_LIBRARIES} pcl_visualization pcl_features pcl_search pcl_segmentation pcl_filters)
 
 
 ## Add cmake target dependencies of the library
