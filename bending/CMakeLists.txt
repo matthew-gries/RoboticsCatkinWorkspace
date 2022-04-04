@@ -130,12 +130,6 @@ add_definitions(${PCL_DEFINITIONS})
 #   src/${PROJECT_NAME}/bending.cpp
 # )
 
-add_executable(talker src/talker.cpp)
-target_link_libraries(talker ${catkin_LIBRARIES})
-
-add_executable(listener src/listener.cpp)
-target_link_libraries(listener ${catkin_LIBRARIES})
-
 add_executable(bending src/bending.cpp)
 target_link_libraries(bending ${catkin_LIBRARIES})
 
