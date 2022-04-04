@@ -104,7 +104,7 @@ find_package(PCL 1.3 REQUIRED COMPONENTS common io)
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
+  INCLUDE_DIRS include
 #  LIBRARIES bending
 #  CATKIN_DEPENDS roscpp rospy std_msgs
 #  DEPENDS system_lib
@@ -117,7 +117,7 @@ catkin_package(
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-# include
+  include
   ${catkin_INCLUDE_DIRS}
 )
 
@@ -130,7 +130,7 @@ add_definitions(${PCL_DEFINITIONS})
 #   src/${PROJECT_NAME}/bending.cpp
 # )
 
-add_executable(bending src/bending.cpp)
+add_executable(bending src/BendingDamageAssessment.cpp src/bending.cpp)
 target_link_libraries(bending ${catkin_LIBRARIES} ${PCL_LIBRARIES} pcl_visualization pcl_features pcl_search pcl_segmentation pcl_filters)
 
 
