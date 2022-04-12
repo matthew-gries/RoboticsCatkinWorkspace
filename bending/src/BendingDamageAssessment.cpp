@@ -14,6 +14,9 @@
 #include "pcl/filters/extract_indices.h"
 #include "pcl/search/kdtree.h"
 
+#include <algorithm>
+#include <limits>
+
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr BendingDamageAssessment::ros2PCL(const sensor_msgs::PointCloud2::ConstPtr& rosCloud) {
     pcl::PCLPointCloud2 pcl_pc2;
     pcl_conversions::toPCL(*rosCloud, pcl_pc2);
@@ -36,7 +39,6 @@ void BendingDamageAssessment::addPointCloud(pcl::PointCloud<pcl::PointXYZRGB>::P
      * @brief Segment the point cloud into planes, should be able to find the cardboard
      * 
      */
-
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZRGB>);
     pcl::copyPointCloud(*pointCloud, *cloud_filtered);
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered_temp(new pcl::PointCloud<pcl::PointXYZRGB>);
@@ -86,7 +88,6 @@ void BendingDamageAssessment::addPointCloud(pcl::PointCloud<pcl::PointXYZRGB>::P
      * @brief Perform cluster extraction to get the cluster representing the cardboard
      * 
      */
-
     pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZRGB>);
     tree->setInputCloud(cloud_filtered);
     std::vector<pcl::PointIndices> cluster_indices;
@@ -117,7 +118,6 @@ void BendingDamageAssessment::addPointCloud(pcl::PointCloud<pcl::PointXYZRGB>::P
      * @brief Find the normals of the cluster representing the cardboard
      * 
      */
-
     // Create the normal estimation class, and pass the input dataset to it
     pcl::NormalEstimation<pcl::PointXYZRGB, pcl::Normal> ne;
     ne.setInputCloud(cluster_cloud);
@@ -145,4 +145,112 @@ void BendingDamageAssessment::addPointCloud(pcl::PointCloud<pcl::PointXYZRGB>::P
     };
 
     this->damageInfo.push_back(info);
+}
+
+BendingDamageInfo& BendingDamageAssessment::getDamageInfoBySequenceNumber(std::uint32_t seq) {
+    std::vector<BendingDamageInfo>::iterator seqIter = std::find_if(
+        this->damageInfo.begin(),
+        this->damageInfo.end(),
+        [seq](BendingDamageInfo& info) {return info.seq == seq;}
+    );
+
+    if (seqIter == this->damageInfo.end()) {
+        return this->mDummyInfo;
+    }
+
+    return *seqIter;
+}
+
+std::vector<BendingDamageNormalCorrespondence> BendingDamageAssessment::findCorrespondences(std::uint32_t a, std::uint32_t b) {
+
+    // Get the point clouds specified by the sequence number
+    std::vector<BendingDamageNormalCorrespondence> corresp;
+
+    BendingDamageInfo& aInfo = this->getDamageInfoBySequenceNumber(a);
+    BendingDamageInfo& bInfo = this->getDamageInfoBySequenceNumber(b);
+
+    if (!aInfo.normals || !bInfo.normals) {
+        return corresp;
+    }
+
+    // Order the point clouds by which is larger and which is smaller
+    bool aLargerThanB = aInfo.normals->size() > bInfo.normals->size();
+
+    pcl::PointCloud<pcl::Normal>::Ptr largerPointCloud = (aLargerThanB) ? aInfo.normals : bInfo.normals;
+    pcl::PointCloud<pcl::Normal>::Ptr smallerPointCloud = (aLargerThanB) ? bInfo.normals : aInfo.normals;
+
+    for (size_t i = 0; i < smallerPointCloud->size(); i++) {
+
+        float minDist = std::numeric_limits<float>::max();
+        size_t minJ = 0;
+
+        const pcl::Normal& norm_i = smallerPointCloud->at(i);
+
+        for (size_t j = 0; j < largerPointCloud->size(); j++) {
+
+            const pcl::Normal& norm_j = largerPointCloud->at(j);
+
+            float dist = sqrt(
+                pow(norm_i.normal_x - norm_j.normal_x, 2) +
+                pow(norm_i.normal_y - norm_j.normal_y, 2) +
+                pow(norm_i.normal_z - norm_j.normal_z, 2) * 1.0
+            );
+
+            if (dist < minDist) {
+                minDist = dist;
+                minJ = j;
+            }
+        }
+
+        if (aLargerThanB) { corresp.push_back(BendingDamageNormalCorrespondence{minJ, i, largerPointCloud, smallerPointCloud}); }
+        else { corresp.push_back(BendingDamageNormalCorrespondence{i, minJ, smallerPointCloud, largerPointCloud}); }
+    }
+
+    return corresp;
+}
+
+BendingDamageErrorData BendingDamageAssessment::getSequenceWithMaxMSE() {
+
+    std::uint32_t refSeq = this->reference->header.seq;
+    float maxError = std::numeric_limits<float>::min();
+    uint32_t maxErrorSeq = refSeq;
+
+    for (const BendingDamageInfo& info : this->damageInfo) {
+        if (info.seq == this->reference->header.seq) {
+            continue;
+        }
+        float error = this->mse(refSeq, info.seq);
+
+        if (error > maxError) {
+            maxError = error;
+            maxErrorSeq = info.seq;
+        }
+
+    }
+
+    return BendingDamageErrorData {
+        maxErrorSeq,
+        refSeq,
+        maxError,
+        BendDamageErrorDataType::MSE_BETWEEN_NEARSET_NORMALS
+    };
+}
+
+float BendingDamageAssessment::mse(std::uint32_t a, std::uint32_t b) {
+    std::vector<BendingDamageNormalCorrespondence> corresp = this->findCorrespondences(a, b);
+
+    float totalError = 0.0;
+
+    for (const BendingDamageNormalCorrespondence& c : corresp) {
+        pcl::Normal& aNorm = c.pointCloudsA->at(c.normalIndexA);
+        pcl::Normal& bNorm = c.pointCloudsA->at(c.normalIndexB);
+
+        totalError += sqrt(
+                pow(aNorm.normal_x - bNorm.normal_x, 2) +
+                pow(aNorm.normal_y - bNorm.normal_y, 2) +
+                pow(aNorm.normal_z - bNorm.normal_z, 2) * 1.0
+            );
+    }
+
+    return totalError / corresp.size();
 }
