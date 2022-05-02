@@ -31,7 +31,8 @@ int main(int argc, char **argv) {
         ros::spinOnce();
     }
 
-    ROS_INFO("Total point clouds read: %ld.", bend.damageInfo.size());
+    BendingDamageErrorData maxNormalMSE = bend.getSequenceWithMaxMSE();
+    ROS_INFO("Max MSE: %f", maxNormalMSE.error);
 
     return 0;
 }
