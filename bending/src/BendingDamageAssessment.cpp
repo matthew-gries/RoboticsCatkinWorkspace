@@ -13,6 +13,7 @@
 #include "pcl/filters/voxel_grid.h"
 #include "pcl/filters/extract_indices.h"
 #include "pcl/search/kdtree.h"
+#include "ros/ros.h"
 
 #include <algorithm>
 #include <limits>
@@ -219,6 +220,7 @@ BendingDamageErrorData BendingDamageAssessment::getSequenceWithMaxMSE() {
         if (info.seq == this->reference->header.seq) {
             continue;
         }
+        ROS_INFO("Geting MSE...");
         float error = this->mse(refSeq, info.seq);
 
         if (error > maxError) {
@@ -237,13 +239,16 @@ BendingDamageErrorData BendingDamageAssessment::getSequenceWithMaxMSE() {
 }
 
 float BendingDamageAssessment::mse(std::uint32_t a, std::uint32_t b) {
+    ROS_INFO("Finding correspondences...");
     std::vector<BendingDamageNormalCorrespondence> corresp = this->findCorrespondences(a, b);
+    ROS_INFO("Correspondences found!");
 
     float totalError = 0.0;
 
     for (const BendingDamageNormalCorrespondence& c : corresp) {
+        // ROS_INFO("%ld %ld", c.pointCloudsA->size(), c.pointCloudsB->size());
         pcl::Normal& aNorm = c.pointCloudsA->at(c.normalIndexA);
-        pcl::Normal& bNorm = c.pointCloudsA->at(c.normalIndexB);
+        pcl::Normal& bNorm = c.pointCloudsB->at(c.normalIndexB);
 
         totalError += sqrt(
                 pow(aNorm.normal_x - bNorm.normal_x, 2) +

@@ -16,6 +16,9 @@ void bendingCallback(const sensor_msgs::PointCloud2::ConstPtr& cardboard) {
     ROS_INFO("Point cloud [%d] added!", cardboard->header.seq);
 
     ROS_INFO("Point cloud sequence ID [%d]", cardboardPointCloud->header.seq);
+
+    BendingDamageErrorData maxNormalMSE = bend.getSequenceWithMaxMSE();
+    ROS_INFO("Max MSE: %f", maxNormalMSE.error);
 }
 
 int main(int argc, char **argv) {
@@ -27,12 +30,10 @@ int main(int argc, char **argv) {
 
     ros::Time startTime = ros::Time::now();
     ros::Duration loopDuration(60.0); // 1 min
-    while ((ros::Time::now() < startTime + loopDuration) && ros::ok()) {
-        ros::spinOnce();
-    }
 
-    BendingDamageErrorData maxNormalMSE = bend.getSequenceWithMaxMSE();
-    ROS_INFO("Max MSE: %f", maxNormalMSE.error);
+    ros::spin();
+
+
 
     return 0;
 }
